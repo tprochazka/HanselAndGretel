@@ -39,15 +39,16 @@ import android.widget.TextView;
  */
 public class FragmentBreadCrumbs extends ViewGroup
         implements FragmentManager.OnBackStackChangedListener {
+
     private static final int MEASURED_HEIGHT_STATE_SHIFT = 16; //XXX As per View
     private static final int MEASURED_STATE_TOO_SMALL = 0x01000000; //XXX As per View
     private static final int MEASURED_STATE_MASK = 0xff000000; //XXX As per View
 
     //XXX As per View
     private static final int getMeasuredState(View child) {
-        return (child.getMeasuredWidth()&MEASURED_STATE_MASK)
-                | ((child.getMeasuredHeight()>>MEASURED_HEIGHT_STATE_SHIFT)
-                        & (MEASURED_STATE_MASK>>MEASURED_HEIGHT_STATE_SHIFT));
+        return (child.getMeasuredWidth() & MEASURED_STATE_MASK)
+                | ((child.getMeasuredHeight() >> MEASURED_HEIGHT_STATE_SHIFT)
+                & (MEASURED_STATE_MASK >> MEASURED_HEIGHT_STATE_SHIFT));
     }
 
     //XXX As per View
@@ -75,7 +76,7 @@ public class FragmentBreadCrumbs extends ViewGroup
             result = specSize;
             break;
         }
-        return result | (childMeasuredState&MEASURED_STATE_MASK);
+        return result | (childMeasuredState & MEASURED_STATE_MASK);
     }
 
 
@@ -88,10 +89,14 @@ public class FragmentBreadCrumbs extends ViewGroup
     BackStackRecord mTopEntry;
     BackStackRecord mParentEntry;
 
+    BackStackRecord mLastEntry;
+    OnClickListener mLastEntryListener;
+
     /** Listener to inform when a parent entry is clicked */
     private OnClickListener mParentClickListener;
 
     private OnBreadCrumbClickListener mOnBreadCrumbClickListener;
+    private int mParentWidth = -1;
 
     /**
      * Interface to intercept clicks on the bread crumbs.
@@ -135,7 +140,7 @@ public class FragmentBreadCrumbs extends ViewGroup
     }
 
     /**
-     * Attach the bread crumbs to their activity.  This must be called once
+     * Attach the bread crumbs to their activity. This must be called once
      * when creating the bread crumbs.
      *
      * @deprecated It will be called automatically now when this will be attached to the window
@@ -210,6 +215,30 @@ public class FragmentBreadCrumbs extends ViewGroup
         updateCrumbs();
     }
 
+    /**
+     * Set new last item of bread crumbs with optional onclick listener
+     *
+     * @author Tomáš Procházka &lt;<a href="mailto:tomas.prochazka@gmail.com">tomas.prochazka@gmail.com</a>&gt;
+     * @param title
+     * @param shortTitle
+     */
+    public void setLastTitle(CharSequence title, CharSequence shortTitle, OnClickListener listener) {
+        mLastEntry = createBackStackEntry(title, shortTitle);
+        mLastEntryListener = listener;
+        updateCrumbs();
+    }
+
+    /**
+     * Set new last item of bread crumbs with optional onclick listener
+     *
+     * @author Tomáš Procházka &lt;<a href="mailto:tomas.prochazka@gmail.com">tomas.prochazka@gmail.com</a>&gt;
+     * @param title
+     * @param shortTitle
+     */
+    public void setLastTitle(CharSequence title, CharSequence shortTitle) {
+        setLastTitle(title, shortTitle, null);
+    }
+
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         // Eventually we should implement our own layout of the views,
@@ -226,6 +255,29 @@ public class FragmentBreadCrumbs extends ViewGroup
             int childBottom = mPaddingTop + child.getMeasuredHeight() - mPaddingBottom;
             child.layout(mPaddingLeft, mPaddingTop, childRight, childBottom);
         }
+
+
+        if (mParentWidth < getMeasuredWidth()) {
+            mParentWidth = getMeasuredWidth();
+        }
+
+        // if breadcrum is too long, this will hide first item and try to force new eval new layout
+        if (mParentWidth == mContainer.getMeasuredWidth()) {
+            int numViews = mContainer.getChildCount();
+            for (int i = 0; i < numViews; i++) {
+                if (mContainer.getChildAt(i).getVisibility() == View.VISIBLE) {
+                    mContainer.getChildAt(i).setVisibility(View.GONE);
+                    if (mContainer.getChildAt(i+1) != null && mContainer.getChildAt(i+1).findViewById(android.R.id.icon) != null) {
+                        mContainer.getChildAt(i+1).findViewById(android.R.id.icon).setVisibility(View.GONE);
+                    }
+                    mContainer.invalidate();
+                    break;
+                }
+            }
+
+        }
+
+
     }
 
     @Override
@@ -261,9 +313,9 @@ public class FragmentBreadCrumbs extends ViewGroup
         maxHeight = Math.max(maxHeight, getSuggestedMinimumHeight());
         maxWidth = Math.max(maxWidth, getSuggestedMinimumWidth());
 
-        setMeasuredDimension(resolveSizeAndState(maxWidth, widthMeasureSpec, measuredChildState),
-                resolveSizeAndState(maxHeight, heightMeasureSpec,
-                        measuredChildState<<MEASURED_HEIGHT_STATE_SHIFT));
+        setMeasuredDimension(
+                resolveSizeAndState(maxWidth, widthMeasureSpec, measuredChildState),
+                resolveSizeAndState(maxHeight, heightMeasureSpec,	measuredChildState << MEASURED_HEIGHT_STATE_SHIFT));
     }
 
     @Override
@@ -279,10 +331,15 @@ public class FragmentBreadCrumbs extends ViewGroup
         return (mTopEntry != null ? 1 : 0) + (mParentEntry != null ? 1 : 0);
     }
 
+    private int getPostEntryCount() {
+        return mLastEntry == null ? 0 : 1;
+    }
+
     /**
      * Returns the pre-entry corresponding to the index. If there is a parent and a top entry
      * set, parent has an index of zero and top entry has an index of 1. Returns null if the
      * specified index doesn't exist or is null.
+     *
      * @param index should not be more than {@link #getPreEntryCount()} - 1
      */
     private BackStackEntry getPreEntry(int index) {
@@ -298,11 +355,18 @@ public class FragmentBreadCrumbs extends ViewGroup
         FragmentManager fm = mActivity.getSupportFragmentManager();
         int numEntries = fm.getBackStackEntryCount();
         int numPreEntries = getPreEntryCount();
+        int numPostEntries = getPostEntryCount();
         int numViews = mContainer.getChildCount();
-        for (int i = 0; i < numEntries + numPreEntries; i++) {
-            BackStackEntry bse = i < numPreEntries
-                    ? getPreEntry(i)
-                    : fm.getBackStackEntryAt(i - numPreEntries);
+        for (int i = 0; i < numEntries + numPreEntries + numPostEntries; i++) {
+            BackStackEntry bse;
+            if (i < numPreEntries) {
+                bse = getPreEntry(i);
+            } else if (i < numPreEntries + numEntries) {
+                bse = fm.getBackStackEntryAt(i - numPreEntries);
+            } else {
+                bse = mLastEntry;
+            }
+
             if (i < numViews) {
                 View v = mContainer.getChildAt(i);
                 Object tag = v.getTag();
@@ -327,7 +391,7 @@ public class FragmentBreadCrumbs extends ViewGroup
                 text.setOnClickListener(mOnClickListener);
             }
         }
-        int viewI = numEntries + numPreEntries;
+        int viewI = numEntries + numPreEntries + numPostEntries;
         numViews = mContainer.getChildCount();
         while (numViews > viewI) {
             mContainer.removeViewAt(numViews - 1);
@@ -337,7 +401,7 @@ public class FragmentBreadCrumbs extends ViewGroup
         for (int i = 0; i < numViews; i++) {
             final View child = mContainer.getChildAt(i);
             // Disable the last one
-            child.findViewById(android.R.id.title).setEnabled(i < numViews - 1);
+            child.findViewById(android.R.id.title).setEnabled(i < numViews - (mLastEntryListener == null ? 1 : 0));
             if (mMaxVisible > 0) {
                 // Make only the last mMaxVisible crumbs visible
                 child.setVisibility(i < numViews - mMaxVisible ? View.GONE : View.VISIBLE);
@@ -357,6 +421,8 @@ public class FragmentBreadCrumbs extends ViewGroup
                     if (mParentClickListener != null) {
                         mParentClickListener.onClick(v);
                     }
+                } else if (bse == mLastEntry && mLastEntryListener != null) {
+                    mLastEntryListener.onClick(v);
                 } else {
                     if (mOnBreadCrumbClickListener != null) {
                         if (mOnBreadCrumbClickListener.onBreadCrumbClick(
