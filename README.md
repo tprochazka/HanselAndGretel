@@ -3,6 +3,9 @@ Hansel And Gretel
 
 Android library providing bread crumbs for compatibility fragments.
 
+Forked version with some custom modification:
+ - remove need to call setActivity() method
+ - add new setLastTitle() method which allow add custom crumbs at the end
 
 
 Usage
@@ -12,33 +15,29 @@ Usage
 
  1. Include the widget in your view. This should usually be placed directly
     above the container in which the associated fragments will be displayed.
-    
+
         <android.support.v4.app.FragmentBreadCrumbs
             android:id="@+id/breadcrumbs"
             android:layout_width="fill_parent"
             android:layout_height="40dp" />
-    
- 2. In your `onCreate` method, bind the widget to the activity.
-    
-        FragmentBreadCrumbs crumbs = (FragmentBreadCrumbs)findViewById(R.id.breadcrumbs);
-        crumbs.setActivity(this);
-    
- 3. Add the required style attributes to your theme.
-    
+
+ 2. Add the required style attributes to your theme.
+
         <item name="hagDividerVertical">@drawable/hag__divider_dark</item>
         <item name="hagSelectableItemBackground">@drawable/hag__background_dark</item>
-    
+
     or
-    
+
         <item name="hagDividerVertical">@drawable/hag__divider_dark</item>
         <item name="hagSelectableItemBackground">@drawable/hag__background_dark</item>
-    
+
     or specify your own drawables for the divider and background.
-    
- 4. *(Optional)* Set the title of the initial view. This can be useful when the
+
+ 3. *(Optional)* Set the title of the initial view. This can be useful when the
     initial activity view has a default fragment.
-    
+
         //continued from above
+        FragmentBreadCrumbs crumbs = (FragmentBreadCrumbs)findViewById(R.id.breadcrumbs);
         crumbs.setTitle("Settings", null);
 
 
@@ -56,11 +55,13 @@ If you are a Maven user you can easily include the library by specifying it as
 a dependency:
 
     <dependency>
-      <groupId>com.jakewharton</groupId>
+      <groupId>cz.atomsoft.android</groupId>
       <artifactId>hanselandgretel</artifactId>
-      <version>1.0.2</version>
+      <version>1.0.3-SNAPSHOT</version>
       <type>apklib</type>
     </dependency>
+
+You must deploy this project to yours maven repository first.
 
 This project depends on the `Fragment` classes which are available in the
 [Android Support Library][2].
